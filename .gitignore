@@ -1,0 +1,20 @@
+# Object files and kernel module outputs
+*.o
+*.ko
+
+# Kernel module intermediate files
+*.mod.c
+*.mod.o
+
+# Module dependency files
+modules.order
+Module.symvers
+
+# Command files generated during build
+*.cmd
+
+# Temporary directory created during build
+.tmp_versions/
+
+# Any additional temporary files
+*~ 
