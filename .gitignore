@@ -5,7 +5,7 @@
 # Kernel module intermediate files
 *.mod.c
 *.mod.o
-
+*.mod
 # Module dependency files
 modules.order
 Module.symvers
