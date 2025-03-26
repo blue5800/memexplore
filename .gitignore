@@ -18,3 +18,6 @@ Module.symvers
 
 # Any additional temporary files
 *~ 
+
+*.qcow2
+*.sh
