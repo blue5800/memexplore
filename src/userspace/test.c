@@ -1,94 +1,58 @@
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <string.h>
-#include <errno.h>
 
-// Structure of the input buffer: [pid (int), addr (unsigned long), size (int)]
-struct mem_request {
-    int pid;
-    unsigned long addr;
-    int size;
+// Define the same structures and macros as in the kernel
+#define MY_IOCTL_MAGIC 'k'
+#define DEVICE_NAME "/dev/suspicious_device"  // Note: device files are typically in /dev
+
+struct mem_args {
+    pid_t pid;
+    unsigned long long addr;
+    unsigned long size;
+    char *data;
 };
 
-int main(void) {
-    int fd;
-    ssize_t ret;
-    char *dev = "/dev/suspicious_device";
+#define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
+#define MY_IOCTL_WRITE _IOWR(MY_IOCTL_MAGIC, 2, struct mem_args)
 
-    // Open the device
-    fd = open(dev, O_RDWR);
+int main() {
+    int fd;
+    struct mem_args args;
+    int ret;
+    char buf[1024];
+    memset(buf, 'A', 1023);
+    buf[1023] = '\0';
+    // Open the device file
+    fd = open(DEVICE_NAME, O_RDWR);
     if (fd < 0) {
         perror("Failed to open device");
         return EXIT_FAILURE;
     }
-
-    // For testing, we will try to read from our own process memory.
-    // Let’s create a local buffer and store some data in it.
-    char *test_data = calloc(1,32768);
-    printf("test_data: %lld\n", (long long)test_data);
-    test_data[0] = 'H';
-    test_data[1] = 'e';
-    test_data[2] = 'l';
-    test_data[3] = 'l';
-    int data_size = 32768;
     
-    // Prepare the mem_request structure.
-    // We use our own PID and the address of our test_data buffer.
-    struct mem_request req;
-    req.pid = getpid();
-    req.addr = (unsigned long)test_data;
-    req.size = 4;
-
-    // The device's read method expects the input buffer to contain the parameters,
-    // and then it will return the read bytes in the same buffer.
-    // We need to allocate a buffer large enough to hold both the parameters and the read data.
-    size_t param_size = sizeof(req);
-    size_t total_size = (param_size > data_size ? param_size : data_size);
-    char *buffer = malloc(total_size);
-    if (!buffer) {
-        perror("malloc");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    // Copy the parameters into the beginning of the buffer.
-    memcpy(buffer, &req, param_size);
-
-    // Now, call read. The driver's read function is expected to:
-    // 1. extract the parameters from the buffer,
-    // 2. read data from the target process memory,
-    // 3. and copy the data back into the buffer.
-    ret = read(fd, buffer, total_size);
+    // Initialize the arguments for reading
+    memset(&args, 0, sizeof(args));
+    args.pid = getpid();  // Set to the current process ID
+    args.addr = (unsigned long long) buf;    // Set to the address to read from
+    args.size = 1024;  // Set to the number of bytes to read
+    args.data = NULL;  // NULL for reads
+    
+    // Perform the read operation
+    ret = ioctl(fd, MY_IOCTL_READ, &args);
     if (ret < 0) {
-        perror("Device read failed");
-        free(buffer);
-        close(fd);
-        return EXIT_FAILURE;
-    } else {
-        printf("Device read returned %zd bytes\n", ret);
-    }
-
-    // Print out the data received.
-    // This should be the data at the provided address, i.e. the content of test_data.
-    // We make sure to add a null terminator before printing.
-    char *received_data = malloc(ret + 1);
-    if (!received_data) {
-        perror("malloc");
-        free(buffer);
+        perror("IOCTL read failed");
         close(fd);
         return EXIT_FAILURE;
     }
-    memcpy(received_data, buffer, ret);
-    received_data[ret] = '\0';
-    printf("Read data: %s\n", received_data);
-
-    free(received_data);
-    free(buffer);
+    
+    printf("Successfully performed read operation\n");
+    
+    // Close the device file
     close(fd);
+    
     return EXIT_SUCCESS;
 }
-

@@ -21,17 +21,12 @@ static struct cdev c_dev;
 
 struct mem_args{
     pid_t pid;
-    unsigned long addr;
+    unsigned long long addr;
     unsigned long size;
     char *data;
 };
 
-struct mem_args args = {
-    .pid = 0,
-    .addr = 0,
-    .size = 0,
-    .data = NULL
-};
+struct mem_args *args = NULL;
 #define SIZE sizeof(struct mem_args)
 
 #define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
@@ -41,8 +36,27 @@ struct mem_args args = {
 //todo: this after figuring out ioctl arguments
 static ssize_t read_mem (struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-    //ssize_t bytes_read = access_process_vm(task, addr, data, size, 0);
-    return 0;
+	if (!args){
+		printk(KERN_ALERT "No arguments\n");
+		return -1;
+	}
+	pid_t pid = args->pid;
+	unsigned long long addr = args->addr;
+	unsigned long size = args->size;
+
+	if (size <= 0 || count < size){
+		printk(KERN_ALERT "Invalid size\n");
+		return -1;
+	}
+
+	struct task_struct *task = pid_task(find_vpid(pid), PIDTYPE_PID);
+	if (!task){
+		printk(KERN_ALERT "Failed to find task\n");
+		return -1;
+	}
+	
+	ssize_t bytes_read = access_process_vm(task, addr, buf, size, 0);
+	return bytes_read;
 }
 
 static ssize_t write_mem (struct file *file, const char __user *buf, size_t count, loff_t *ppos)
@@ -68,14 +82,25 @@ static int device_release(struct inode *inode, struct file *file)
 
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
-	struct mem_args *args;
+	if (args){
+		kfree(args);
+	}
+
+	args = kmalloc(SIZE, GFP_KERNEL);
+	if (!args){
+		printk(KERN_ALERT "Failed to allocate memory\n");
+		return -1;
+	}
+
 	switch (ioctl_num){
 		case MY_IOCTL_READ:
+			printk(KERN_INFO "ioctl read\n");
 			if(copy_from_user(args, (void __user *)ioctl_param, SIZE)){
 			printk(KERN_INFO "Failed to copy from user\n");
 			return -1;
 			}
-			printk(KERN_INFO "new data. got pid:%d, vma:%p,size:%lu\n", args->pid, args->data,args->size);
+			printk(KERN_INFO "survived copy from user\n");
+			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu\n", args->pid, args->addr,args->size);
 			break;
 		case MY_IOCTL_WRITE:
 			break;
@@ -113,6 +138,7 @@ static int __init mod_init(void)
     device_create(c1, NULL, MKDEV(MAJOR, MINOR), NULL, DEVICE_NAME);
 
     printk(KERN_INFO "Registered with major number %d\n", MAJOR);
+
     return 0;
 }
 void __exit mod_exit(void);
