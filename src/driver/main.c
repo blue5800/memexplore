@@ -51,6 +51,21 @@ static ssize_t write_mem (struct file *file, const char __user *buf, size_t coun
 	return 0;
 }
 
+
+//define open and close functions
+
+static int device_open(struct inode *inode, struct file *file)
+{
+    printk(KERN_INFO "Device opened\n");
+    return 0;
+}
+
+static int device_release(struct inode *inode, struct file *file)
+{
+    printk(KERN_INFO "Device closed\n");
+    return 0;
+}
+
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	struct mem_args *args;
@@ -75,7 +90,9 @@ static struct file_operations fops = {
     .owner = THIS_MODULE,
     .read = read_mem,
     .write = write_mem,
-    .unlocked_ioctl = device_ioctl
+    .unlocked_ioctl = device_ioctl,
+    .open = device_open,
+    .release = device_release
 };
 
 static int __init mod_init(void);
