@@ -20,10 +20,10 @@ static struct cdev c_dev;
 #define MY_IOCTL_MAGIC 'k'
 
 struct mem_args{
-    pid_t pid;
-    unsigned long long addr;
-    unsigned long size;
-    char *data;
+	pid_t pid;
+	unsigned long long addr;
+	unsigned long size;
+	char *data;
 };
 
 struct mem_args *args = NULL;
@@ -99,8 +99,37 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			printk(KERN_INFO "Failed to copy from user\n");
 			return -1;
 			}
-			printk(KERN_INFO "survived copy from user\n");
-			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu\n", args->pid, args->addr,args->size);
+			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu,data ptr:0x%llx\n", args->pid, args->addr,args->size, (unsigned long long) args->data);
+
+			pid_t pid = args->pid;
+			unsigned long long addr = args->addr;
+			unsigned long size = args->size;
+			char *data = args->data;
+			
+			struct task_struct *task = pid_task(find_vpid(pid), PIDTYPE_PID);
+			if (!task){
+				printk(KERN_ALERT "Failed to find task\n");
+				return -1;
+			}
+			void *tmp = kmalloc(size, GFP_KERNEL);
+			if (!tmp){
+				printk(KERN_ALERT "Failed to allocate memory for temp buffer\n");
+				return -1;
+			}
+			long bytes_read = access_process_vm(task, addr, tmp, size, 0);
+			if (bytes_read < 0){
+				printk(KERN_ALERT "Failed to read from process\n");
+				kfree(tmp);
+				return -1;
+			}
+			if (copy_to_user(data, tmp, size)){
+				printk(KERN_ALERT "Failed to copy to user\n");
+				kfree(tmp);
+				return -1;
+			}
+			kfree(tmp);
+			return bytes_read;
+
 			break;
 		case MY_IOCTL_WRITE:
 			break;

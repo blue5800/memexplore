@@ -10,11 +10,11 @@
 #define MY_IOCTL_MAGIC 'k'
 #define DEVICE_NAME "/dev/suspicious_device"  // Note: device files are typically in /dev
 
-struct mem_args {
-    pid_t pid;
-    unsigned long long addr;
-    unsigned long size;
-    char *data;
+struct mem_args{
+	pid_t pid;
+	unsigned long long addr;
+	unsigned long size;
+	char *data;
 };
 
 #define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
@@ -28,6 +28,9 @@ int main() {
     memset(buf, 'A', 1023);
     buf[1023] = '\0';
     // Open the device file
+    char buf2[1024];
+    memset(buf2, '\0', 1023);
+
     fd = open(DEVICE_NAME, O_RDWR);
     if (fd < 0) {
         perror("Failed to open device");
@@ -39,9 +42,12 @@ int main() {
     args.pid = getpid();  // Set to the current process ID
     args.addr = (unsigned long long) buf;    // Set to the address to read from
     args.size = 1024;  // Set to the number of bytes to read
-    args.data = NULL;  // NULL for reads
+    args.data = buf2; 
+
     
     // Perform the read operation
+    printf("buffer pre read: %s\n", buf2);
+
     ret = ioctl(fd, MY_IOCTL_READ, &args);
     if (ret < 0) {
         perror("IOCTL read failed");
@@ -49,8 +55,11 @@ int main() {
         return EXIT_FAILURE;
     }
     
-    printf("Successfully performed read operation\n");
+    printf("Successfully did read\n");
+    printf("Data read: %s\n", buf2);
     
+    
+
     // Close the device file
     close(fd);
     
