@@ -16,43 +16,66 @@ static int MAJOR;
 static int MINOR = 0;
 const struct class *c1;
 static struct cdev c_dev;
+
+#define MY_IOCTL_MAGIC 'k'
+
+struct mem_args{
+    pid_t pid;
+    unsigned long addr;
+    unsigned long size;
+    char *data;
+};
+
+struct mem_args args = {
+    .pid = 0,
+    .addr = 0,
+    .size = 0,
+    .data = NULL
+};
+#define SIZE sizeof(struct mem_args)
+
+#define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
+#define MY_IOCTL_WRITE _IOWR(MY_IOCTL_MAGIC, 2, struct mem_args)
+
+
+//todo: this after figuring out ioctl arguments
 static ssize_t read_mem (struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-    //we expect the buffer to contain 3 integral types.
-    //1: pid
-    //2: virtual address
-    //3: number of bytes to read
-    int pid;
-    unsigned long addr;
-    int size;
-    if (count < sizeof(int) + sizeof(unsigned long) + sizeof(int)){printk(KERN_ALERT "Buffer too small\n");return -EINVAL;}
-    if (copy_from_user(&pid, buf, sizeof(int))){printk(KERN_ALERT "Failed to read pid\n");return -EFAULT;}
-    if (copy_from_user(&addr, buf + sizeof(int), sizeof(unsigned long))){printk(KERN_ALERT "Failed to read address\n");return -EFAULT;}
-    if (copy_from_user(&size, buf + sizeof(int) + sizeof(unsigned long), sizeof(int))){printk(KERN_ALERT "Failed to read size\n");return -EFAULT;}
-    
-    if (pid < 0 || size < 0 || count < size){printk(KERN_ALERT "something wrong. pid: %d, size: %d, count: %lu \n",pid,size,count);return -EINVAL;}
-    printk("args: pid: %d, addr: %lu, size: %d\n",pid,addr,size);
-    struct task_struct *task;
-    task = pid_task(find_vpid(pid), PIDTYPE_PID);
-
-    if (task == NULL){printk(KERN_ALERT "Failed to find task\n");return -EINVAL;}
-    
-    void *data = kmalloc(size, GFP_KERNEL);
-
-    if (data == NULL){printk(KERN_ALERT "Failed to allocate memory\n");kfree(data);return -ENOMEM;}
-
-    ssize_t bytes_read = access_process_vm(task, addr, data, size, 0);
-
-    if (bytes_read < 0){printk(KERN_ALERT "Failed to read memory\n");kfree(data);return -EFAULT;}
-    
-    if (copy_to_user(buf, data, bytes_read)){printk(KERN_ALERT "Failed to copy data to user\n");kfree(data);return -EFAULT;}
-    kfree(data);
+    //ssize_t bytes_read = access_process_vm(task, addr, data, size, 0);
     return 0;
+}
+
+static ssize_t write_mem (struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+	//ssize_t bytes_written = access_process_vm(task, addr, data, size, 1);
+	return 0;
+}
+
+static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
+{
+	struct mem_args *args;
+	switch (ioctl_num){
+		case MY_IOCTL_READ:
+			if(copy_from_user(args, (void __user *)ioctl_param, SIZE)){
+			printk(KERN_INFO "Failed to copy from user\n");
+			return -1;
+			}
+			printk(KERN_INFO "new data. got pid:%d, vma:%p,size:%lu\n", args->pid, args->data,args->size);
+			break;
+		case MY_IOCTL_WRITE:
+			break;
+		default:
+			printk(KERN_INFO "Invalid ioctl\n");
+			return -1;
+	}
+	return 0;
 }
 
 static struct file_operations fops = {
     .owner = THIS_MODULE,
     .read = read_mem,
+    .write = write_mem,
+    .unlocked_ioctl = device_ioctl
 };
 
 static int __init mod_init(void);
