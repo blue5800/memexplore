@@ -1,57 +1,28 @@
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <string.h>
-
+#include "lib/memexplore.h"
 // Define the same structures and macros as in the kernel
-#define MY_IOCTL_MAGIC 'k'
-#define DEVICE_NAME "/dev/suspicious_device"  // Note: device files are typically in /dev
-
-struct mem_args{
-	pid_t pid;
-	unsigned long long addr;
-	unsigned long size;
-	char *data;
-};
-
-#define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
-#define MY_IOCTL_WRITE _IOWR(MY_IOCTL_MAGIC, 2, struct mem_args)
 
 int main() {
-    int fd;
-    struct mem_args args;
     int ret;
     char buf[1024];
     memset(buf, 'A', 1023);
     buf[1023] = '\0';
-    // Open the device file
     char buf2[1024];
     memset(buf2, '\0', 1023);
-
-    fd = open(DEVICE_NAME, O_RDWR);
-    if (fd < 0) {
-        perror("Failed to open device");
-        return EXIT_FAILURE;
-    }
-    
-    // Initialize the arguments for reading
-    memset(&args, 0, sizeof(args));
-        args.pid = getpid();  // Set to the current process ID
-    args.addr = (unsigned long long) buf;    // Set to the address to read from
-    args.size = 1024;  // Set to the number of bytes to read
-    args.data = buf2;   //target buffer
-
-    
-    // Perform the read operation
+    strcpy(buf2, "hi, we're pre read rn.");
     printf("buffer pre read: %s\n", buf2);
-
-    ret = ioctl(fd, MY_IOCTL_READ, &args);
+    int pid = getpid();
+    ret = mem_read(pid, buf, 1024, buf2);
     if (ret < 0) {
-        perror("IOCTL read failed");
-        close(fd);
+        printf("Failed to read\n");
+        if (ret == NO_DRIVER) {
+            printf("Driver not loaded\n");
+        }
         return EXIT_FAILURE;
     }
     
@@ -60,24 +31,40 @@ int main() {
     
     printf("-----------------\n");
     printf("now writing to buffer\n");
+
     char buf3[1024];
     memset(buf3, 'e', 1023);
     strcpy(buf3, "octopus");
-    args.addr = (unsigned long long) buf;
-    args.data = buf3;
-    args.size = 1024;
     printf("buffer pre write: %s\n", buf);
-    ret = ioctl(fd, MY_IOCTL_WRITE, &args);
+    ret = mem_write(pid, buf, 1024, buf3);
     if (ret < 0) {
-        perror("IOCTL write failed");
-        close(fd);
+        printf("Failed to write\n");
+        if (ret == NO_DRIVER) {
+            printf("Driver not loaded\n");
+        }
         return EXIT_FAILURE;
     }
     printf("Successfully did write\n");
     printf("Data written: %s\n", buf);
 
     // Close the device file
-    close(fd);
-    
+    int *p = malloc(4);
+    p[0] = 20;
+    p[1] = 30;
+    p[2] = 40;
+    p[3] = 50;
+    printf("Data pre write: %d\n", p[2]);
+    int replace = 100;
+    ret = mem_write(pid, (&p[2]), 4, &replace);
+    if (ret < 0) {
+        printf("Failed to write\n");
+        if (ret == NO_DRIVER) {
+            printf("Driver not loaded\n");
+        }
+        return EXIT_FAILURE;
+    }
+    printf("Successfully did write\n");
+
+    printf("Data written: %d\n", p[2]);
     return EXIT_SUCCESS;
 }

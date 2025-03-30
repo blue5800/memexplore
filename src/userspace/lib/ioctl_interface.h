@@ -1,5 +1,5 @@
 #pragma once
-char device_name[] = "suspicious_device";
+char device_path[] = "/dev/suspicious_device";
 
 struct mem_args{
 	int pid;
