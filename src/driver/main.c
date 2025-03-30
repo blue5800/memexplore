@@ -9,7 +9,7 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/uaccess.h>
-
+#include "Ioctl_interface.h"
 #define DEVICE_NAME "suspicious_device"
 #define CLASS_NAME "suspicious_class"
 static int MAJOR;
@@ -17,20 +17,11 @@ static int MINOR = 0;
 const struct class *c1;
 static struct cdev c_dev;
 
-#define MY_IOCTL_MAGIC 'k'
 
-struct mem_args{
-	pid_t pid;
-	unsigned long long addr;
-	unsigned long size;
-	char *data;
-};
 
 struct mem_args *args = NULL;
 #define SIZE sizeof(struct mem_args)
 
-#define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
-#define MY_IOCTL_WRITE _IOWR(MY_IOCTL_MAGIC, 2, struct mem_args)
 
 
 //todo: this after figuring out ioctl arguments
@@ -132,6 +123,8 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 			break;
 		case MY_IOCTL_WRITE:
+			printk(KERN_INFO "ioctl write\n");
+
 			break;
 		default:
 			printk(KERN_INFO "Invalid ioctl\n");
