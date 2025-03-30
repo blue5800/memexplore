@@ -7,5 +7,4 @@ this tool can obviously be used for bad. I'm working on it for the sole purpose 
 
 - [x] reading process memory
 - [x] writing process memory
-- [x] user friendly-ish API
-- [ ] test for other processes
+- [x] userspace api
