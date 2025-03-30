@@ -17,47 +17,18 @@ static int MINOR = 0;
 const struct class *c1;
 static struct cdev c_dev;
 
-
-
 struct mem_args *args = NULL;
 #define SIZE sizeof(struct mem_args)
 
-
-
-//todo: this after figuring out ioctl arguments
 static ssize_t read_mem (struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-	if (!args){
-		printk(KERN_ALERT "No arguments\n");
-		return -1;
-	}
-	pid_t pid = args->pid;
-	unsigned long long addr = args->addr;
-	unsigned long size = args->size;
-
-	if (size <= 0 || count < size){
-		printk(KERN_ALERT "Invalid size\n");
-		return -1;
-	}
-
-	struct task_struct *task = pid_task(find_vpid(pid), PIDTYPE_PID);
-	if (!task){
-		printk(KERN_ALERT "Failed to find task\n");
-		return -1;
-	}
-	
-	ssize_t bytes_read = access_process_vm(task, addr, buf, size, 0);
-	return bytes_read;
+	return 0;
 }
 
 static ssize_t write_mem (struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
-	//ssize_t bytes_written = access_process_vm(task, addr, data, size, 1);
 	return 0;
 }
-
-
-//define open and close functions
 
 static int device_open(struct inode *inode, struct file *file)
 {
@@ -73,6 +44,13 @@ static int device_release(struct inode *inode, struct file *file)
 
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
+	pid_t pid;
+	unsigned int flags = FOLL_FORCE;
+	unsigned long long addr;
+	unsigned long size;
+	char *data;
+	struct task_struct *task;
+	void *tmp;
 	if (args){
 		kfree(args);
 	}
@@ -92,22 +70,22 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			}
 			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu,data ptr:0x%llx\n", args->pid, args->addr,args->size, (unsigned long long) args->data);
 
-			pid_t pid = args->pid;
-			unsigned long long addr = args->addr;
-			unsigned long size = args->size;
-			char *data = args->data;
-			
-			struct task_struct *task = pid_task(find_vpid(pid), PIDTYPE_PID);
+			pid = args->pid;
+			addr = args->addr;
+			size = args->size;
+			data = args->data;
+			task = pid_task(find_vpid(pid), PIDTYPE_PID);
+
 			if (!task){
 				printk(KERN_ALERT "Failed to find task\n");
 				return -1;
 			}
-			void *tmp = kmalloc(size, GFP_KERNEL);
+			tmp = kmalloc(size, GFP_KERNEL);
 			if (!tmp){
 				printk(KERN_ALERT "Failed to allocate memory for temp buffer\n");
 				return -1;
 			}
-			long bytes_read = access_process_vm(task, addr, tmp, size, 0);
+			long bytes_read = access_process_vm(task, addr, tmp, size, flags);
 			if (bytes_read < 0){
 				printk(KERN_ALERT "Failed to read from process\n");
 				kfree(tmp);
@@ -123,8 +101,39 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 			break;
 		case MY_IOCTL_WRITE:
-			printk(KERN_INFO "ioctl write\n");
 
+			printk(KERN_INFO "ioctl write\n");
+			if(copy_from_user(args, (void __user *)ioctl_param, SIZE)){
+			printk(KERN_INFO "Failed to copy from user\n");
+			return -1;
+			}
+			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu,data ptr:0x%llx\n", args->pid, args->addr,args->size, (unsigned long long) args->data);
+
+			pid = args->pid;
+			addr = args->addr;
+			size = args->size;
+			data = args->data;
+			
+			task = pid_task(find_vpid(pid), PIDTYPE_PID);
+			if (!task){
+				printk(KERN_ALERT "Failed to find task\n");
+				return -1;
+			}
+
+			tmp = kmalloc(size, GFP_KERNEL);
+			if (!tmp){
+				printk(KERN_ALERT "Failed to allocate memory for temp buffer\n");
+				return -1;
+			}
+			if (copy_from_user(tmp, data, size)){
+				printk(KERN_ALERT "Failed to copy from user\n");
+				kfree(tmp);
+				return -1;
+			}
+			flags |= FOLL_WRITE;
+			long bytes_written = access_process_vm(task, addr, tmp, size, flags);
+			kfree(tmp);
+			return bytes_written;
 			break;
 		default:
 			printk(KERN_INFO "Invalid ioctl\n");

@@ -39,10 +39,10 @@ int main() {
     
     // Initialize the arguments for reading
     memset(&args, 0, sizeof(args));
-    args.pid = getpid();  // Set to the current process ID
+        args.pid = getpid();  // Set to the current process ID
     args.addr = (unsigned long long) buf;    // Set to the address to read from
     args.size = 1024;  // Set to the number of bytes to read
-    args.data = buf2; 
+    args.data = buf2;   //target buffer
 
     
     // Perform the read operation
@@ -58,7 +58,23 @@ int main() {
     printf("Successfully did read\n");
     printf("Data read: %s\n", buf2);
     
-    
+    printf("-----------------\n");
+    printf("now writing to buffer\n");
+    char buf3[1024];
+    memset(buf3, 'e', 1023);
+    strcpy(buf3, "octopus");
+    args.addr = (unsigned long long) buf;
+    args.data = buf3;
+    args.size = 1024;
+    printf("buffer pre write: %s\n", buf);
+    ret = ioctl(fd, MY_IOCTL_WRITE, &args);
+    if (ret < 0) {
+        perror("IOCTL write failed");
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    printf("Successfully did write\n");
+    printf("Data written: %s\n", buf);
 
     // Close the device file
     close(fd);
