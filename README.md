@@ -6,5 +6,5 @@ this tool can obviously be used for bad. I'm working on it for the sole purpose 
 # features:
 
 - [x] reading process memory
-- [ ] writing process memory
-- [ ] user friendly-ish API
+- [x] writing process memory
+- [x] userspace api
