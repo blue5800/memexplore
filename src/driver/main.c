@@ -9,7 +9,8 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/uaccess.h>
-#include "Ioctl_interface.h"
+#include "ioctl_interface.h"
+#include "read_write.h"
 #define DEVICE_NAME "suspicious_device"
 #define CLASS_NAME "suspicious_class"
 static int MAJOR;
@@ -17,123 +18,41 @@ static int MINOR = 0;
 const struct class *c1;
 static struct cdev c_dev;
 
-struct mem_args *args = NULL;
-#define SIZE sizeof(struct mem_args)
-
-static ssize_t read_mem (struct file *file, char __user *buf, size_t count, loff_t *ppos)
+//todo: i'm not sure yet actually. i don't really know what to do with the read and write functions.
+//suggestions? they're here because i was gonna use them but ended up going with ioctl because it does arguments nicer...
+static ssize_t read_mem(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
 	return 0;
 }
 
-static ssize_t write_mem (struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+static ssize_t write_mem(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	return 0;
 }
 
+//this needs to exist for ioctl because that requires a file descriptor.
 static int device_open(struct inode *inode, struct file *file)
 {
     printk(KERN_INFO "Device opened\n");
     return 0;
 }
-
+//if we open we need to close.
 static int device_release(struct inode *inode, struct file *file)
 {
     printk(KERN_INFO "Device closed\n");
     return 0;
 }
 
+//handle ioctl calls
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
-	pid_t pid;
-	unsigned int flags = FOLL_FORCE;
-	unsigned long long addr;
-	unsigned long size;
-	char *data;
-	struct task_struct *task;
-	void *tmp;
-	if (args){
-		kfree(args);
-	}
-
-	args = kmalloc(SIZE, GFP_KERNEL);
-	if (!args){
-		printk(KERN_ALERT "Failed to allocate memory\n");
-		return -1;
-	}
 
 	switch (ioctl_num){
 		case MY_IOCTL_READ:
-			printk(KERN_INFO "ioctl read\n");
-			if(copy_from_user(args, (void __user *)ioctl_param, SIZE)){
-			printk(KERN_INFO "Failed to copy from user\n");
-			return -1;
-			}
-			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu,data ptr:0x%llx\n", args->pid, args->addr,args->size, (unsigned long long) args->data);
-
-			pid = args->pid;
-			addr = args->addr;
-			size = args->size;
-			data = args->data;
-			task = pid_task(find_vpid(pid), PIDTYPE_PID);
-
-			if (!task){
-				printk(KERN_ALERT "Failed to find task\n");
-				return -1;
-			}
-			tmp = kmalloc(size, GFP_KERNEL);
-			if (!tmp){
-				printk(KERN_ALERT "Failed to allocate memory for temp buffer\n");
-				return -1;
-			}
-			long bytes_read = access_process_vm(task, addr, tmp, size, flags);
-			if (bytes_read < 0){
-				printk(KERN_ALERT "Failed to read from process\n");
-				kfree(tmp);
-				return -1;
-			}
-			if (copy_to_user(data, tmp, size)){
-				printk(KERN_ALERT "Failed to copy to user\n");
-				kfree(tmp);
-				return -1;
-			}
-			kfree(tmp);
-			return bytes_read;
-
+			return read_copy_to_user((void __user *)ioctl_param);
 			break;
 		case MY_IOCTL_WRITE:
-
-			printk(KERN_INFO "ioctl write\n");
-			if(copy_from_user(args, (void __user *)ioctl_param, SIZE)){
-			printk(KERN_INFO "Failed to copy from user\n");
-			return -1;
-			}
-			printk(KERN_INFO "new data. got pid:%d, vma:0x%llx,size:%lu,data ptr:0x%llx\n", args->pid, args->addr,args->size, (unsigned long long) args->data);
-
-			pid = args->pid;
-			addr = args->addr;
-			size = args->size;
-			data = args->data;
-			
-			task = pid_task(find_vpid(pid), PIDTYPE_PID);
-			if (!task){
-				printk(KERN_ALERT "Failed to find task\n");
-				return -1;
-			}
-
-			tmp = kmalloc(size, GFP_KERNEL);
-			if (!tmp){
-				printk(KERN_ALERT "Failed to allocate memory for temp buffer\n");
-				return -1;
-			}
-			if (copy_from_user(tmp, data, size)){
-				printk(KERN_ALERT "Failed to copy from user\n");
-				kfree(tmp);
-				return -1;
-			}
-			flags |= FOLL_WRITE;
-			long bytes_written = access_process_vm(task, addr, tmp, size, flags);
-			kfree(tmp);
-			return bytes_written;
+			return write_copy_from_user((void __user *)ioctl_param);
 			break;
 		default:
 			printk(KERN_INFO "Invalid ioctl\n");
@@ -142,6 +61,7 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	return 0;
 }
 
+//yup 
 static struct file_operations fops = {
     .owner = THIS_MODULE,
     .read = read_mem,
@@ -151,9 +71,11 @@ static struct file_operations fops = {
     .release = device_release
 };
 
+//i'm not sure why the kernel makes me double define but whatever
 static int __init mod_init(void);
 static int __init mod_init(void)
 {
+	printk(KERN_INFO "Initializing bad module\n");
     MAJOR = register_chrdev(0, DEVICE_NAME, &fops);
     if (MAJOR < 0){
     	printk(KERN_ALERT "Failed to register a major number\n");
@@ -172,6 +94,7 @@ static int __init mod_init(void)
 
     return 0;
 }
+//same thing
 void __exit mod_exit(void);
 void __exit mod_exit(void)
 {

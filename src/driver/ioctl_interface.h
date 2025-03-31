@@ -1,6 +1,6 @@
-#define MY_IOCTL_MAGIC 'k'
+#pragma once
 
-char device_name[] = "suspicious_device";
+static char device_path[] = "/dev/suspicious_device";
 
 struct mem_args{
 	pid_t pid;
@@ -8,6 +8,7 @@ struct mem_args{
 	unsigned long size;
 	char *data;
 };
+#define ARG_SIZE sizeof(struct mem_args)
 #define MY_IOCTL_MAGIC 'k'
 #define MY_IOCTL_READ _IOWR(MY_IOCTL_MAGIC, 1, struct mem_args)
 #define MY_IOCTL_WRITE _IOWR(MY_IOCTL_MAGIC, 2, struct mem_args)
